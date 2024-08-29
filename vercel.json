@@ -3,7 +3,7 @@
         {
             "src": "app.py",
             "use": "@vercel/python"
-            ,"config": { "runtime": "python3.9" }
+            ,"config": { "runtime": "python" }
 
         }
     ],
