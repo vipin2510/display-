@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Existing Thana Spreadsheet</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            margin-top: 2rem;
+        }
+        label {
+            margin-top: 1rem;
+        }
+        input[type="text"],
+        input[type="submit"] {
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        input[type="submit"] {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        input[type="submit"]:hover {
+            background-color: #1976D2;
+        }
+        .error {
+            color: red;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Access Existing Thana Spreadsheet</h1>
+        <form method="POST">
+            <label for="thana_name">Thana Name:</label>
+            <input type="text" id="thana_name" name="thana_name" required>
+            <input type="submit" value="Access Spreadsheet">
+        </form>
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+    </div>
+</body>
+</html>

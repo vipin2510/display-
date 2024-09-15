@@ -24,9 +24,34 @@
             text-align: center;
             color: #333;
         }
-        form {
+        .button-container {
             display: flex;
+            justify-content: space-around;
+            margin-top: 2rem;
+        }
+        .button {
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .button-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .button-secondary {
+            background-color: #2196F3;
+            color: white;
+        }
+        .button:hover {
+            opacity: 0.9;
+        }
+        form {
+            display: none;
             flex-direction: column;
+            margin-top: 2rem;
         }
         label {
             margin-top: 1rem;
@@ -51,38 +76,67 @@
             color: red;
             margin-top: 1rem;
         }
+        .message {
+            color: green;
+            margin-top: 1rem;
+        }
+        footer {
+            background-color: white;
+            width: 100vw;
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            height: fit-content;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Thana Spreadsheet Creator</h1>
-        <form method="POST">
+        <div class="button-container">
+            <button class="button button-primary" onclick="showForm('new')">New Thana</button>
+            <button class="button button-secondary" onclick="showForm('existing')">Existing Thana</button>
+        </div>
+        <form id="newThanaForm" method="POST" style="display: none;">
+            <input type="hidden" name="action" value="new_thana">
             <label for="thana_name">Thana Name:</label>
             <input type="text" id="thana_name" name="thana_name" required>
-            
-            <label for="existing_thana">
-                <input type="checkbox" id="existing_thana" name="existing_thana" value="1">
-                Use existing Thana spreadsheet
-            </label>
-            
-            <div id="email_field">
-                <label for="user_email">Email:</label>
-                <input type="email" id="user_email" name="user_email">
-            </div>
-            
-            <input type="submit" value="Create/Access Spreadsheet">
+            <label for="user_email">Email:</label>
+            <input type="email" id="user_email" name="user_email" required>
+            <input type="submit" value="Create New Spreadsheet">
+        </form>
+        <form id="existingThanaForm" action="{{ url_for('existing_thana') }}" method="POST" style="display: none;">
+            <input type="hidden" name="action" value="existing_thana">
+            <label for="existing_thana_name">Thana Name:</label>
+            <input type="text" id="existing_thana_name" name="thana_name" required>
+            <input type="submit" value="Access Existing Spreadsheet">
         </form>
         {% if error %}
         <p class="error">{{ error }}</p>
         {% endif %}
+        {% if message %}
+        <p class="message">{{ message | safe }}</p>
+        {% endif %}
     </div>
-
+    <footer>
+        <span></span>
+        <p>Developed By Coding Wizards</p>
+        <p>Contact - 9926685773</p>
+    </footer>
     <script>
-        document.getElementById('existing_thana').addEventListener('change', function() {
-            var emailField = document.getElementById('email_field');
-            emailField.style.display = this.checked ? 'none' : 'block';
-            document.getElementById('user_email').required = !this.checked;
-        });
+        function showForm(formType) {
+            document.getElementById('newThanaForm').style.display = 'none';
+            document.getElementById('existingThanaForm').style.display = 'none';
+            if (formType === 'new') {
+                document.getElementById('newThanaForm').style.display = 'flex';
+            } else {
+                document.getElementById('existingThanaForm').style.display = 'flex';
+            }
+        }
     </script>
 </body>
 </html>
