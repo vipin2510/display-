@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,29 +15,35 @@
             margin: 0;
             background-color: #f0f0f0;
         }
+
         .container {
             background-color: white;
             padding: 2rem;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
+
         h1 {
             text-align: center;
             color: #333;
         }
+
         form {
             display: flex;
             flex-direction: column;
             margin-top: 2rem;
         }
+
         label {
             margin-top: 1rem;
         }
+
         input[type="text"],
         input[type="submit"] {
             padding: 0.5rem;
             margin-top: 0.5rem;
         }
+
         input[type="submit"] {
             background-color: #2196F3;
             color: white;
@@ -44,26 +51,75 @@
             cursor: pointer;
             transition: background-color 0.3s;
         }
+
         input[type="submit"]:hover {
             background-color: #1976D2;
         }
+
         .error {
             color: red;
             margin-top: 1rem;
         }
+
+        button {
+            padding: 8px 12px;
+            margin-top: 12px;
+            background-color: #4CAF50;
+            color: white;
+            width: 100%;
+            font-size: 1rem;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button.loading {
+            background-color: #333;
+            cursor: not-allowed;
+        }
+
+        .loader {
+            animation: loading 750ms infinite linear;
+        }
+
+        @keyframes loading {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Access Existing Thana Spreadsheet</h1>
-        <form method="POST">
+        <form method="POST" onsubmit="handleSubmit(event)">
             <label for="thana_name">Thana Name:</label>
             <input type="text" id="thana_name" name="thana_name" required>
-            <input type="submit" value="Access Spreadsheet">
+            <button id="submitBtn" type="submit">Access Spreadsheet</button>
         </form>
         {% if error %}
         <p class="error">{{ error }}</p>
         {% endif %}
     </div>
+    <script>
+        function handleSubmit(event) {
+            const submitBtn = document.getElementById("submitBtn");
+
+            // Disable the button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = "<img class='loader' height='22px' width='22px' src='/assets/icons/loader.png' alt='loader'>";
+            submitBtn.classList.add('loading');
+        }
+    </script>
 </body>
+
 </html>

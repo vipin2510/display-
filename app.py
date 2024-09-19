@@ -47,6 +47,10 @@ DB_SHEET_THANA_ID = os.environ.get('DB_SHEET_THANA_ID')
 def css(filename):
     return send_from_directory('assets/css', filename)
 
+@app.route('/assets/icons/<path:filename>')
+def icons(filename):
+    return send_from_directory('assets/icons', filename)
+
 def setup_db_sheet_thana():
     global DB_SHEET_THANA_ID
     try:

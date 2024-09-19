@@ -1,129 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Thana Spreadsheet Creator</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-        .container {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        .button-container {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 2rem;
-        }
-        .button {
-            padding: 1rem 2rem;
-            font-size: 1rem;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.3s;
-        }
-        .button-primary {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .button-secondary {
-            background-color: #2196F3;
-            color: white;
-        }
-        .button:hover {
-            opacity: 0.9;
-        }
-        form {
-            display: none;
-            flex-direction: column;
-            margin-top: 2rem;
-        }
-        label {
-            margin-top: 1rem;
-        }
-        input[type="text"],
-        input[type="email"],
-        input[type="submit"] {
-            padding: 0.5rem;
-            margin-top: 0.5rem;
-        }
-        input[type="submit"] {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        input[type="submit"]:hover {
-            background-color: #45a049;
-        }
-        .error {
-            color: red;
-            margin-top: 1rem;
-        }
-        .message {
-            color: green;
-            margin-top: 1rem;
-        }
-        footer {
-            background-color: white;
-            width: 100vw;
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            height: fit-content;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem;
-        }
-    </style>
+    <link rel="stylesheet" href="/assets/css/index.css">
 </head>
+
 <body>
-    <div class="container">
-        <h1>Thana Spreadsheet Creator</h1>
-        <div class="button-container">
-            <button class="button button-primary" onclick="showForm('new')">New Thana</button>
-            <button class="button button-secondary" onclick="showForm('existing')">Existing Thana</button>
+    <main>
+        <div class="container">
+            <h1>Thana Spreadsheet Creator</h1>
+            <div class="button-container">
+                <button class="button button-primary" onclick="showForm('new')">New Thana</button>
+                <button class="button button-secondary" onclick="showForm('existing')">Existing Thana</button>
+            </div>
+            <form id="newThanaForm" method="POST" onsubmit="handleSubmit(event)" style="display: none;">
+                <input type="hidden" name="action" value="new_thana">
+                <label for="thana_name">Thana Name:</label>
+                <input type="text" id="thana_name" name="thana_name" required>
+                <label for="user_email">Email:</label>
+                <input type="email" id="user_email" name="user_email" required>
+                <button type="submit" class="submit">Create New Spreadsheet</button>
+            </form>
+            <form id="existingThanaForm" action="{{ url_for('existing_thana') }}" onsubmit="handleSubmit(event)"
+                method="POST" style="display: none;">
+                <input type="hidden" name="action" value="existing_thana">
+                <label for="existing_thana_name">Thana Name:</label>
+                <input type="text" id="existing_thana_name" name="thana_name" required>
+                <button class="submit" type="submit">Access Existing Spreadsheet</button>
+            </form>
+            {% if error %}
+            <p class="error">{{ error }}</p>
+            {% endif %}
+            {% if message %}
+            <p class="message">{{ message | safe }}</p>
+            {% endif %}
         </div>
-        <form id="newThanaForm" method="POST" style="display: none;">
-            <input type="hidden" name="action" value="new_thana">
-            <label for="thana_name">Thana Name:</label>
-            <input type="text" id="thana_name" name="thana_name" required>
-            <label for="user_email">Email:</label>
-            <input type="email" id="user_email" name="user_email" required>
-            <input type="submit" value="Create New Spreadsheet">
-        </form>
-        <form id="existingThanaForm" action="{{ url_for('existing_thana') }}" method="POST" style="display: none;">
-            <input type="hidden" name="action" value="existing_thana">
-            <label for="existing_thana_name">Thana Name:</label>
-            <input type="text" id="existing_thana_name" name="thana_name" required>
-            <input type="submit" value="Access Existing Spreadsheet">
-        </form>
-        {% if error %}
-        <p class="error">{{ error }}</p>
-        {% endif %}
-        {% if message %}
-        <p class="message">{{ message | safe }}</p>
-        {% endif %}
-    </div>
+    </main>
     <footer>
-        <span></span>
         <p>Developed By Coding Wizards</p>
         <p>Contact - 9926685773</p>
     </footer>
@@ -137,6 +53,15 @@
                 document.getElementById('existingThanaForm').style.display = 'flex';
             }
         }
+        function handleSubmit(event) {
+            const submitBtn = document.getElementsByClassName("submit");
+            for (const btn of submitBtn) {
+                btn.disabled = true;
+                btn.innerHTML = "<img class='loader' height='22px' width='22px' src='/assets/icons/loader.png' alt='loader'>";
+                btn.classList.add('loading');
+            }
+        }
     </script>
 </body>
+
 </html>
