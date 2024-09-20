@@ -210,23 +210,34 @@ def get_settings(spreadsheet_id):
 def get_sheet_data(sheet_name, columns_to_display, photo_column, display_type, spreadsheet_id):
     sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
     all_values = sheet.get_all_values()
-    headers = [all_values[0][ord(col) - ord('A')] for col in columns_to_display]
+
+    headers = []
+    for col in columns_to_display:
+        if col:  # Check if col is not empty
+            headers.append(all_values[0][ord(col) - ord('A')])
+        else:
+            headers.append('')  # Handle empty columns if needed
+
     data = []
     for row in all_values[1:]:
         row_data = []
         for col in columns_to_display:
-            cell_value = row[ord(col) - ord('A')]
-            # Check if the column is the photo column
-            if col == photo_column:
-                file_id = get_file_id_from_url(cell_value)
-                if file_id:
-                    # Link to download the image via Flask route
-                    cell_value = f'/get_image/{file_id}'
-            row_data.append(cell_value)
+            if col:  # Check if col is not empty
+                cell_value = row[ord(col) - ord('A')]
+                # Check if the column is the photo column
+                if col == photo_column:
+                    file_id = get_file_id_from_url(cell_value)
+                    if file_id:
+                        # Link to download the image via Flask route
+                        cell_value = f'/get_image/{file_id}'
+                row_data.append(cell_value)
+            else:
+                row_data.append('')  # Handle empty columns if needed
         data.append(row_data)
+
     if display_type == 'last 5 row':
         data = data[-5:]
-    
+
     return headers, data
 
 def get_file_id_from_url(url):
