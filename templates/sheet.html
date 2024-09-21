@@ -136,6 +136,32 @@
         if (savedTheme) {
             switchTheme(savedTheme);
         }
+
+        let scrollPosition = 0;
+
+        function scrollTable() {
+            const container = document.getElementById('sheetDisplay');
+            const table = container.querySelector('table');
+            let scrollSpeed = 2;  // You can adjust this speed for slower or faster scrolling
+
+            function scroll() {
+                scrollPosition += scrollSpeed;  // Scroll down 1px at a time
+                container.scrollTop = scrollPosition;
+
+                // Check if the scroll has reached the bottom, reset to top if so
+                if (scrollPosition >= table.clientHeight - container.clientHeight) {
+                    scrollPosition = 0;
+                }
+
+                setTimeout(scroll, 50);  // Adjust the speed of scrolling (50ms delay)
+            }
+
+            scroll();
+        }
+
+        // Start scrolling when the page loads
+        window.onload = scrollTable;
+
     </script>
 </body>
 

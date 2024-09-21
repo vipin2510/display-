@@ -101,6 +101,7 @@ td {
     max-height: 200px;
     overflow: auto;
     word-wrap: break-word;
+    border-radius: 4px;
 }
 
 td img {
@@ -109,6 +110,11 @@ td img {
     display: block;
     object-fit: cover;
     transition: transform 0.3s ease-in-out;
+}
+
+#sheetDisplay{
+    height: calc(100vh - 100px);
+    overflow: hidden;
 }
 
 .modal {
