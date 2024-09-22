@@ -22,7 +22,7 @@ REQUESTS_PER_MINUTE = 50
 SECONDS_PER_MINUTE = 60
 
 # Monitoring constants
-CHECK_INTERVAL = 10  # Check for changes every 10 seconds (adjust as needed)
+CHECK_INTERVAL = 45  # Check for changes every 10 seconds (adjust as needed)
 
 # State file
 STATE_FILE = 'sheet_state.json'

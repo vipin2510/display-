@@ -110,10 +110,10 @@ def create_user_spreadsheet(thana_name, user_email):
 
         add_to_db_sheet_thana(thana_name, user_email, spreadsheet_id)
 
-        logging.info(f"Created new spreadsheet for {thana_name} with ID: {spreadsheet_id}")
+        logging.info(f"Created new spreadsheet for {thana_name} with ID: {spreadsheet_id}/{thana_name} के लिए नई स्प्रेडशीट बनाई गई है, जिसका ID है: {spreadsheet_id}")
         return spreadsheet_id
     except Exception as e:
-        logging.error(f"Error creating user spreadsheet: {str(e)}")
+        logging.error(f"Error creating user spreadsheet: {str(e)}/उपयोगकर्ता स्प्रेडशीट बनाने में त्रुटि: {str(e)}")
         raise
 
 def get_existing_thana_spreadsheet(thana_name):
@@ -161,7 +161,7 @@ def existing_thana():
         spreadsheet_id = get_existing_thana_spreadsheet(thana_name)
         
         if not spreadsheet_id:
-            return render_template('existing_thana.html', error="Thana not found. Please check the name and try again.")
+            return render_template('existing_thana.html', error="Thana not found. Please check the name and try again./थाना का नाम नहीं मिला। कृपया नाम जांचें और पुनः प्रयास करें।")
         
         return redirect(url_for('display_sheet', spreadsheet_id=spreadsheet_id))
     

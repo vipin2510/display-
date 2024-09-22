@@ -11,25 +11,25 @@
 <body>
     <main>
         <div class="container">
-            <h1>Thana Spreadsheet Creator</h1>
+            <h1>सूचना पट्ट /Information Board</h1>
             <div class="button-container">
-                <button class="button button-primary" onclick="showForm('new')">New Thana</button>
-                <button class="button button-secondary" onclick="showForm('existing')">Existing Thana</button>
+                <button class="button button-primary" onclick="showForm('new')">नया शीट थाने के लिए/New Thana</button>
+                <button class="button button-secondary" onclick="showForm('existing')">मौजूदा शीट थाने की/Existing Thana</button>
             </div>
             <form id="newThanaForm" method="POST" onsubmit="handleSubmit(event)" style="display: none;">
                 <input type="hidden" name="action" value="new_thana">
-                <label for="thana_name">Thana Name:</label>
+                <label for="thana_name">थाने का नाम/Thana Name:              </label>
                 <input type="text" id="thana_name" name="thana_name" required>
-                <label for="user_email">Email:</label>
+                <label for="user_email">ईमेल/Email:                </label>
                 <input type="email" id="user_email" name="user_email" required>
-                <button type="submit" class="submit">Create New Spreadsheet</button>
+                <button type="submit" class="submit">नया स्प्रेडशीट बनाएं/Create New Spreadsheet               </button>
             </form>
             <form id="existingThanaForm" action="{{ url_for('existing_thana') }}" onsubmit="handleSubmit(event)"
                 method="POST" style="display: none;">
                 <input type="hidden" name="action" value="existing_thana">
-                <label for="existing_thana_name">Thana Name:</label>
+                <label for="existing_thana_name">थाने का नाम/Thana Name:</label>
                 <input type="text" id="existing_thana_name" name="thana_name" required>
-                <button class="submit" type="submit">Access Existing Spreadsheet</button>
+                <button class="submit" type="submit">मौजूदा स्प्रेडशीट तक पहुंचें/Access Existing Spreadsheet</button>
             </form>
             {% if error %}
             <p class="error">{{ error }}</p>
