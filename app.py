@@ -7,6 +7,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import logging
+import threading
+from checker import sheet_checker
 
 logging.basicConfig(level=logging.INFO)
 
@@ -266,9 +268,12 @@ def get_image(file_id):
         app.logger.error(f"Error fetching image: {str(e)}")
         return redirect('/static/placeholder.png')
 
+def start_background_task():
+    thread = threading.Thread(target=sheet_checker)
+    thread.daemon = True  # Daemonize thread to exit when main program exits
+    thread.start()
+
 if __name__ == '__main__':
-    db_sheet_id = setup_db_sheet_thana()
-    if db_sheet_id:
-        app.run(debug=True)
-    else:
-        logging.error("Failed to set up db_sheet_thana. Application not started.")
+    start_background_task()
+
+    app.run(debug=True)
