@@ -93,7 +93,6 @@ def add_to_db_sheet_thana(thana_name, user_email, spreadsheet_id):
     except Exception as e:
         logging.error(f"Error adding to db_sheet_thana: {str(e)}")
         raise
-
 def create_user_spreadsheet(thana_name, user_email):
     try:
         # Copy the template spreadsheet
@@ -104,28 +103,29 @@ def create_user_spreadsheet(thana_name, user_email):
 
         spreadsheet_id = copied_spreadsheet['id']
 
-        # Add permissions for the specific user
+        # Grant the specific user write access
         drive_service.permissions().create(
             fileId=spreadsheet_id,
             body={'type': 'user', 'role': 'writer', 'emailAddress': user_email},
             fields='id'
         ).execute()
 
-        # Make the spreadsheet publicly accessible (anyone with the link can view)
+        # Make the spreadsheet publicly accessible (anyone can view)
         drive_service.permissions().create(
             fileId=spreadsheet_id,
-            body={'type': 'anyone', 'role': 'reader'},  # 'writer' if you want public edit access
+            body={'type': 'anyone', 'role': 'writer'},  # Change 'role' to 'writer' if edit access is needed
             fields='id'
         ).execute()
 
-        # Add the spreadsheet details to the DB sheet
+        # Add the spreadsheet details to the db_sheet_thana
         add_to_db_sheet_thana(thana_name, user_email, spreadsheet_id)
 
-        logging.info(f"Created new spreadsheet for {thana_name} with ID: {spreadsheet_id}")
+        logging.info(f"Created new spreadsheet for {thana_name} with ID: {spreadsheet_id}/{thana_name} के लिए नई स्प्रेडशीट बनाई गई है, जिसका ID है: {spreadsheet_id}")
         return spreadsheet_id
     except Exception as e:
-        logging.error(f"Error creating user spreadsheet: {str(e)}")
+        logging.error(f"Error creating user spreadsheet: {str(e)}/उपयोगकर्ता स्प्रेडशीट बनाने में त्रुटि: {str(e)}")
         raise
+
 
 def get_existing_thana_spreadsheet(thana_name):
     try:
