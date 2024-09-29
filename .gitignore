@@ -1,4 +1,4 @@
 .venv
-.env
+    .env
 sheet_state.json
 Pipfile
