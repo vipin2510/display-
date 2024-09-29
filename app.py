@@ -9,6 +9,9 @@ from googleapiclient.http import MediaIoBaseDownload
 import logging
 import threading
 from checker import sheet_checker
+import requests
+import base64
+import functools
 
 logging.basicConfig(level=logging.INFO)
 
@@ -53,6 +56,20 @@ def css(filename):
 def icons(filename):
     return send_from_directory('assets/icons', filename)
 
+# Caching decorator to minimize API calls
+def cache_results(func):
+    cache = {}
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        key = args + tuple(kwargs.items())
+        if key not in cache:
+            cache[key] = func(*args, **kwargs)
+        return cache[key]
+
+    return wrapper
+
+@cache_results
 def setup_db_sheet_thana():
     global DB_SHEET_THANA_ID
     try:
@@ -93,6 +110,7 @@ def add_to_db_sheet_thana(thana_name, user_email, spreadsheet_id):
     except Exception as e:
         logging.error(f"Error adding to db_sheet_thana: {str(e)}")
         raise
+
 def create_user_spreadsheet(thana_name, user_email):
     try:
         copied_spreadsheet = drive_service.files().copy(
@@ -101,7 +119,7 @@ def create_user_spreadsheet(thana_name, user_email):
         ).execute()
         spreadsheet_id = copied_spreadsheet['id']
 
-        # Make the spreadsheet publicly accessible
+        # Make the spreadsheet publicly accessible with write access
         drive_service.permissions().create(
             fileId=spreadsheet_id,
             body={'type': 'anyone', 'role': 'writer'},
@@ -109,12 +127,13 @@ def create_user_spreadsheet(thana_name, user_email):
         ).execute()
 
         add_to_db_sheet_thana(thana_name, user_email, spreadsheet_id)
-        logging.info(f"Created new public spreadsheet for {thana_name} with ID: {spreadsheet_id}/{thana_name} के लिए नई सार्वजनिक स्प्रेडशीट बनाई गई है, जिसका ID है: {spreadsheet_id}")
+        logging.info(f"Created new public spreadsheet for {thana_name} with ID: {spreadsheet_id}")
         return spreadsheet_id
     except Exception as e:
-        logging.error(f"Error creating public user spreadsheet: {str(e)}/सार्वजनिक उपयोगकर्ता स्प्रेडशीट बनाने में त्रुटि: {str(e)}")
+        logging.error(f"Error creating public user spreadsheet: {str(e)}")
         raise
 
+@cache_results
 def get_existing_thana_spreadsheet(thana_name):
     try:
         sheet = client.open_by_key(DB_SHEET_THANA_ID).sheet1
@@ -167,9 +186,10 @@ def existing_thana():
     return render_template('existing_thana.html')
 
 @app.route('/sheet/<spreadsheet_id>', methods=['GET'])
+@app.route('/sheet/<spreadsheet_id>', methods=['GET'])
 def display_sheet(spreadsheet_id):
     try:
-        settings = get_settings(spreadsheet_id)
+        settings, missing_sheets = get_settings(spreadsheet_id)
         sheets_data = []
         for setting in settings:
             headers, data = get_sheet_data(
@@ -185,28 +205,50 @@ def display_sheet(spreadsheet_id):
                 'data': data,
                 'time_of_display': setting['time_of_display']
             })
-        
+
+        # Construct messages for missing sheets
+        missing_sheets_messages = []
+        for missing_sheet in missing_sheets:
+            missing_sheets_messages.append(f"Sheet '{missing_sheet}' listed in the 'Setting' sheet but not found in the spreadsheet.")
+            missing_sheets_messages.append(f"शीट '{missing_sheet}' 'सेटिंग' शीट में सूचीबद्ध है लेकिन स्प्रेडशीट में नहीं मिली।")
+
         spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
-        
-        return render_template('sheet.html', sheets_data=sheets_data, spreadsheet_url=spreadsheet_url)
+
+        return render_template('sheet.html', sheets_data=sheets_data, spreadsheet_url=spreadsheet_url, missing_sheets_messages=missing_sheets_messages)
     except Exception as e:
         app.logger.error(f"An error occurred: {str(e)}")
         return f"An error occurred: {str(e)}"
 
+@cache_results
 def get_settings(spreadsheet_id):
-    sheet = client.open_by_key(spreadsheet_id).worksheet('Setting')
-    settings = sheet.get_all_values()[1:]  # Exclude header row
-    return [
-        {
-            'sheet_name': row[0],
-            'time_of_display': int(row[1]),
-            'columns_to_display': row[3].split(','),  # D: Columns to display
-            'photo_column': row[6] if row[6] else None,  # G: Image column
-            'display': row[4],
-            'title': row[5]
-        }
-        for row in settings if row[1] != '0'  # Exclude rows with time_of_display = 0
-    ]
+    sheet = client.open_by_key(spreadsheet_id)
+    
+    # Get list of sheets in the actual spreadsheet
+    actual_sheets = [worksheet.title for worksheet in sheet.worksheets()]
+
+    # Access the 'Setting' sheet
+    setting_sheet = sheet.worksheet('Setting')
+    settings = setting_sheet.get_all_values()[1:]  # Exclude header row
+
+    missing_sheets = []
+    valid_settings = []
+
+    # Iterate over settings and check if the sheet exists in the actual spreadsheet
+    for row in settings:
+        sheet_name = row[0]
+        if sheet_name not in actual_sheets:
+            missing_sheets.append(sheet_name)
+        else:
+            valid_settings.append({
+                'sheet_name': sheet_name,
+                'time_of_display': int(row[1]),
+                'columns_to_display': row[3].split(','),  # D: Columns to display
+                'photo_column': row[6] if row[6] else None,  # G: Image column
+                'display': row[4],
+                'title': row[5]
+            })
+
+    return valid_settings, missing_sheets
 
 def get_sheet_data(sheet_name, columns_to_display, photo_column, display_type, spreadsheet_id):
     sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
