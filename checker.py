@@ -2,7 +2,7 @@ import os
 import logging
 import time
 import json
-from typing import Dict, List
+import httpx
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Vercel KV API URLs and tokens
+VERCEL_KV_URL = os.getenv("display_REST_API_URL")
+VERCEL_KV_TOKEN = os.getenv("display_REST_API_TOKEN")
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,10 +26,7 @@ REQUESTS_PER_MINUTE = 50
 SECONDS_PER_MINUTE = 60
 
 # Monitoring constants
-CHECK_INTERVAL = 45  # Check for changes every 10 seconds (adjust as needed)
-
-# State file
-STATE_FILE = 'sheet_state.json'
+CHECK_INTERVAL = 45  # Check for changes every 45 seconds
 
 class RateLimiter:
     def __init__(self, max_calls, period):
@@ -70,7 +71,7 @@ def get_credentials():
     return creds
 
 @rate_limiter
-def get_spreadsheet_ids(service, display_sheet_log_id: str) -> List[str]:
+def get_spreadsheet_ids(service, display_sheet_log_id: str):
     try:
         result = service.spreadsheets().values().get(
             spreadsheetId=display_sheet_log_id,
@@ -90,7 +91,7 @@ def get_spreadsheet_ids(service, display_sheet_log_id: str) -> List[str]:
         raise
 
 @rate_limiter
-def get_sheet_data(service, spreadsheet_id: str) -> Dict[str, List]:
+def get_sheet_data(service, spreadsheet_id: str):
     try:
         sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
         sheets = sheet_metadata.get('sheets', '')
@@ -111,8 +112,7 @@ def get_sheet_data(service, spreadsheet_id: str) -> Dict[str, List]:
         raise
 
 @rate_limiter
-@rate_limiter
-def update_setting_sheet(service, spreadsheet_id: str, sheet_data: Dict[str, List]) -> bool:
+def update_setting_sheet(service, spreadsheet_id: str, sheet_data):
     try:
         sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
         setting_sheet = next((sheet for sheet in sheet_metadata.get('sheets', '') if sheet['properties']['title'] == "Setting"), None)
@@ -126,30 +126,17 @@ def update_setting_sheet(service, spreadsheet_id: str, sheet_data: Dict[str, Lis
         existing_data = result.get('values', [])
         new_data = [["sheet_name", "time_of_display (in sec)", "existing column", "columns in display", "display", "Title to display as", "photo column"]]
 
-        # Build a map of existing data for easy lookup and modification
         existing_sheets = {row[0]: row for row in existing_data[1:] if len(row) >= 3}
         
-        # Update existing entries or add new ones
         for sheet_name, columns in sheet_data.items():
             columns_string = ','.join(columns)
             if sheet_name in existing_sheets:
-                # Update existing sheet data
                 existing_row = existing_sheets[sheet_name]
                 existing_row[2] = columns_string
                 new_data.append(existing_row)
             else:
-                # Add new sheet data
                 new_data.append([sheet_name, "10", columns_string, "", "last 5 row", "", ""])
 
-        # Remove sheets that no longer exist
-        sheets_to_remove = set(existing_sheets.keys()) - set(sheet_data.keys())
-        for sheet_name in sheets_to_remove:
-            logging.info(f"Removed sheet '{sheet_name}' from Setting sheet")
-
-        # Log the new data being sent to the 'Setting' sheet for debugging
-        logging.info(f"New data to be written to the 'Setting' sheet: {new_data}")
-
-        # Write the updated data back to the 'Setting' sheet
         response = service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range=setting_sheet_range,
@@ -157,7 +144,6 @@ def update_setting_sheet(service, spreadsheet_id: str, sheet_data: Dict[str, Lis
             valueInputOption='USER_ENTERED'
         ).execute()
 
-        # Log the response from the update request
         logging.info(f"Update response: {response}")
         return True
 
@@ -165,18 +151,36 @@ def update_setting_sheet(service, spreadsheet_id: str, sheet_data: Dict[str, Lis
         logging.error(f"An error occurred while updating the Setting sheet for spreadsheet {spreadsheet_id}: {error}")
         raise
 
-def load_state():
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+async def load_state():
+    try:
+        # Make a GET request to Vercel KV
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{VERCEL_KV_URL}/kv/sheet_state", headers={"Authorization": f"Bearer {VERCEL_KV_TOKEN}"})
+            if response.status_code == 200:
+                return json.loads(response.text)
+            else:
+                logging.error(f"Error fetching state from Vercel KV: {response.text}")
+                return {}
+    except Exception as e:
+        logging.error(f"Error loading state from KV: {str(e)}")
+        return {}
 
-def save_state(state):
-    with open(STATE_FILE, 'w') as f:
-        json.dump(state, f)
+async def save_state(state):
+    try:
+        # Make a PUT request to Vercel KV
+        async with httpx.AsyncClient() as client:
+            response = await client.put(
+                f"{VERCEL_KV_URL}/kv/sheet_state",
+                headers={"Authorization": f"Bearer {VERCEL_KV_TOKEN}"},
+                json={"value": json.dumps(state)}
+            )
+            if response.status_code != 200:
+                logging.error(f"Error saving state to Vercel KV: {response.text}")
+    except Exception as e:
+        logging.error(f"Error saving state to KV: {str(e)}")
 
-def monitor_and_update(service, display_sheet_log_id: str):
-    state = load_state()
+async def monitor_and_update(service, display_sheet_log_id):
+    state = await load_state()
     while True:
         try:
             spreadsheet_ids = get_spreadsheet_ids(service, display_sheet_log_id)
@@ -200,7 +204,7 @@ def monitor_and_update(service, display_sheet_log_id: str):
             
             if changes_made:
                 logging.info("Changes detected and applied. Continuing monitoring...")
-                save_state(state)
+                await save_state(state)
             else:
                 logging.info("No changes detected. Continuing monitoring...")
             
