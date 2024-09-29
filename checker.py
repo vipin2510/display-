@@ -1,8 +1,7 @@
 import os
 import logging
 import time
-import json
-import httpx
+from typing import Dict, List
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -10,10 +9,6 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
-# Vercel KV API URLs and tokens
-VERCEL_KV_URL = os.getenv("display_REST_API_URL")
-VERCEL_KV_TOKEN = os.getenv("display_REST_API_TOKEN")
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,7 +21,7 @@ REQUESTS_PER_MINUTE = 50
 SECONDS_PER_MINUTE = 60
 
 # Monitoring constants
-CHECK_INTERVAL = 45  # Check for changes every 45 seconds
+CHECK_INTERVAL = 10  # Check for changes every 10 seconds
 
 class RateLimiter:
     def __init__(self, max_calls, period):
@@ -71,7 +66,7 @@ def get_credentials():
     return creds
 
 @rate_limiter
-def get_spreadsheet_ids(service, display_sheet_log_id: str):
+def get_spreadsheet_ids(service, display_sheet_log_id: str) -> List[str]:
     try:
         result = service.spreadsheets().values().get(
             spreadsheetId=display_sheet_log_id,
@@ -91,124 +86,119 @@ def get_spreadsheet_ids(service, display_sheet_log_id: str):
         raise
 
 @rate_limiter
-def get_sheet_data(service, spreadsheet_id: str):
-    try:
-        sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-        sheets = sheet_metadata.get('sheets', '')
-        
-        sheet_data = {}
-        for sheet in sheets:
-            sheet_name = sheet['properties']['title']
-            if sheet_name != "Setting":
-                range_name = f"{sheet_name}!1:1"
-                result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
-                values = result.get('values', [[]])[0]
-                columns = [chr(65 + i) for i in range(len(values))]
-                sheet_data[sheet_name] = columns
-        
-        return sheet_data
-    except HttpError as error:
-        logging.error(f"An error occurred while fetching sheet data for spreadsheet {spreadsheet_id}: {error}")
-        raise
+def get_multiple_sheets_data(service, spreadsheet_ids: List[str]) -> Dict[str, Dict[str, List]]:
+    """Fetches data from all provided spreadsheet IDs in a single batch."""
+    all_sheets_data = {}
+
+    for spreadsheet_id in spreadsheet_ids:
+        try:
+            sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+            sheets = sheet_metadata.get('sheets', '')
+            sheet_data = {}
+
+            for sheet in sheets:
+                sheet_name = sheet['properties']['title']
+                if sheet_name != "Setting":
+                    range_name = f"{sheet_name}!1:1"
+                    result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+                    values = result.get('values', [[]])[0]
+                    columns = [chr(65 + i) for i in range(len(values))]
+                    sheet_data[sheet_name] = columns
+
+            all_sheets_data[spreadsheet_id] = sheet_data
+        except HttpError as error:
+            logging.error(f"Error fetching data for spreadsheet {spreadsheet_id}: {error}")
+            continue
+
+    return all_sheets_data
 
 @rate_limiter
-def update_setting_sheet(service, spreadsheet_id: str, sheet_data):
-    try:
-        sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-        setting_sheet = next((sheet for sheet in sheet_metadata.get('sheets', '') if sheet['properties']['title'] == "Setting"), None)
-        
-        if not setting_sheet:
-            logging.error(f"The 'Setting' sheet does not exist in the spreadsheet with ID {spreadsheet_id}.")
-            return False
+def update_multiple_settings_sheets(service, sheets_data: Dict[str, Dict[str, List]]) -> bool:
+    """Update the 'Setting' sheets in bulk across multiple spreadsheets."""
+    for spreadsheet_id, sheet_data in sheets_data.items():
+        try:
+            sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+            setting_sheet = next((sheet for sheet in sheet_metadata.get('sheets', '') if sheet['properties']['title'] == "Setting"), None)
 
-        setting_sheet_range = "Setting!A1:Z1000"
-        result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=setting_sheet_range).execute()
-        existing_data = result.get('values', [])
-        new_data = [["sheet_name", "time_of_display (in sec)", "existing column", "columns in display", "display", "Title to display as", "photo column"]]
+            if not setting_sheet:
+                logging.error(f"The 'Setting' sheet does not exist in the spreadsheet with ID {spreadsheet_id}.")
+                continue
 
-        existing_sheets = {row[0]: row for row in existing_data[1:] if len(row) >= 3}
-        
-        for sheet_name, columns in sheet_data.items():
-            columns_string = ','.join(columns)
-            if sheet_name in existing_sheets:
-                existing_row = existing_sheets[sheet_name]
-                existing_row[2] = columns_string
-                new_data.append(existing_row)
-            else:
-                new_data.append([sheet_name, "10", columns_string, "", "last 5 row", "", ""])
+            setting_sheet_range = "Setting!A1:Z1000"
+            result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=setting_sheet_range).execute()
+            existing_data = result.get('values', [])
+            new_data = [["sheet_name", "time_of_display (in sec)", "existing column", "columns in display", "display", "Title to display as", "photo column"]]
 
-        response = service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range=setting_sheet_range,
-            body={'values': new_data},
-            valueInputOption='USER_ENTERED'
-        ).execute()
+            # Build a map of existing data for easy lookup and modification
+            existing_sheets = {row[0]: row for row in existing_data[1:] if len(row) >= 3}
 
-        logging.info(f"Update response: {response}")
-        return True
+            # Update existing entries or add new ones
+            for sheet_name, columns in sheet_data.items():
+                columns_string = ','.join(columns)
+                if sheet_name in existing_sheets:
+                    # Update existing sheet data
+                    existing_row = existing_sheets[sheet_name]
+                    existing_row[2] = columns_string
+                    new_data.append(existing_row)
+                else:
+                    # Add new sheet data
+                    new_data.append([sheet_name, "10", columns_string, "", "last 5 row", "", ""])
 
-    except HttpError as error:
-        logging.error(f"An error occurred while updating the Setting sheet for spreadsheet {spreadsheet_id}: {error}")
-        raise
+            # Log the new data being sent to the 'Setting' sheet for debugging
+            logging.info(f"Updating 'Setting' sheet for spreadsheet {spreadsheet_id}")
 
-async def load_state():
-    try:
-        # Make a GET request to Vercel KV
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{VERCEL_KV_URL}/kv/sheet_state", headers={"Authorization": f"Bearer {VERCEL_KV_TOKEN}"})
-            if response.status_code == 200:
-                return json.loads(response.text)
-            else:
-                logging.error(f"Error fetching state from Vercel KV: {response.text}")
-                return {}
-    except Exception as e:
-        logging.error(f"Error loading state from KV: {str(e)}")
-        return {}
+            # Write the updated data back to the 'Setting' sheet
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=setting_sheet_range,
+                body={'values': new_data},
+                valueInputOption='USER_ENTERED'
+            ).execute()
 
-async def save_state(state):
-    try:
-        # Make a PUT request to Vercel KV
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"{VERCEL_KV_URL}/kv/sheet_state",
-                headers={"Authorization": f"Bearer {VERCEL_KV_TOKEN}"},
-                json={"value": json.dumps(state)}
-            )
-            if response.status_code != 200:
-                logging.error(f"Error saving state to Vercel KV: {response.text}")
-    except Exception as e:
-        logging.error(f"Error saving state to KV: {str(e)}")
+        except HttpError as error:
+            logging.error(f"Error updating the 'Setting' sheet for spreadsheet {spreadsheet_id}: {error}")
+            continue
 
-async def monitor_and_update(service, display_sheet_log_id):
-    state = await load_state()
+    return True
+
+def monitor_and_update(service, display_sheet_log_id: str):
+    state = {}  # Use in-memory dictionary instead of JSON file
+    last_update_time = {}  # Tracks the last update time for each spreadsheet
+
     while True:
         try:
             spreadsheet_ids = get_spreadsheet_ids(service, display_sheet_log_id)
-            changes_made = False
             current_time = int(time.time())
+            sheets_to_update = {}
 
-            for spreadsheet_id in spreadsheet_ids:
-                try:
-                    last_check_time = state.get(spreadsheet_id, 0)
-                    sheet_data = get_sheet_data(service, spreadsheet_id)
-                    
-                    if current_time - last_check_time > CHECK_INTERVAL:
-                        if update_setting_sheet(service, spreadsheet_id, sheet_data):
-                            changes_made = True
-                            state[spreadsheet_id] = current_time
-                except HttpError as error:
-                    if error.resp.status == 429:
-                        logging.warning(f"Rate limit exceeded for spreadsheet {spreadsheet_id}. Skipping to next spreadsheet.")
-                    else:
-                        logging.error(f"Error processing spreadsheet {spreadsheet_id}: {error}")
-            
-            if changes_made:
-                logging.info("Changes detected and applied. Continuing monitoring...")
-                await save_state(state)
+            # Collect data for all spreadsheets before performing updates
+            all_sheets_data = get_multiple_sheets_data(service, spreadsheet_ids)
+
+            # Check each sheet's last update time and prepare data for bulk update
+            for spreadsheet_id, sheet_data in all_sheets_data.items():
+                last_check_time = state.get(spreadsheet_id, 0)
+                last_updated = last_update_time.get(spreadsheet_id, 0)
+
+                # Only update if CHECK_INTERVAL has passed and changes detected after last update
+                if current_time - last_check_time > CHECK_INTERVAL and current_time - last_updated > CHECK_INTERVAL:
+                    sheets_to_update[spreadsheet_id] = sheet_data
+                    state[spreadsheet_id] = current_time  # Update state with new check time
+
+            # If updates are necessary, apply them and update last_update_time
+            if sheets_to_update:
+                logging.info("Detected changes. Performing bulk updates...")
+                update_multiple_settings_sheets(service, sheets_to_update)
+                
+                # Update last update time for each modified spreadsheet
+                for spreadsheet_id in sheets_to_update:
+                    last_update_time[spreadsheet_id] = current_time
+                
             else:
-                logging.info("No changes detected. Continuing monitoring...")
-            
+                logging.info("No changes detected. Waiting for the next check...")
+
+            # Sleep before checking again
             time.sleep(CHECK_INTERVAL)
+
         except Exception as e:
             logging.error(f"An error occurred during monitoring: {str(e)}")
             logging.info("Retrying in 60 seconds...")
