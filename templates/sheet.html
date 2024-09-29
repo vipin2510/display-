@@ -25,20 +25,34 @@
             <button class="navButton" onclick="logout()"><img src="/assets/icons/logout.png" alt="logout"></button>
         </div>
     </nav>
+
+    <!-- Section to show error messages for missing sheets -->
     <div class="container">
-        <div id="sheetDisplay">
-        </div>
+        {% if missing_sheets_messages %}
+            <div class="alert alert-danger">
+                <ul>
+                    {% for message in missing_sheets_messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div id="sheetDisplay"></div>
     </div>
+
     <div id="linkModal" class="modal">
         <div class="modal-content">
             <p>स्प्रेडशीट लिंक/Spreadsheet Link: <a href="{{ spreadsheet_url }}" target="_blank">{{ spreadsheet_url }}</a></p>
             <span class="close" onclick="closeModal()">&times;</span>
         </div>
     </div>
+
     <footer>
         <p>Developed By Coding Wizards</p>
         <p>Contact - 9926685773</p>
     </footer>
+
     <script>
         const allSheetData = JSON.parse('{{ sheets_data | tojson | safe }}');
         let currentSheetIndex = 0;
@@ -76,6 +90,7 @@
         }
 
         rotateSheets();
+
         function showLink() {
             document.getElementById('linkModal').style.display = 'flex';
         }
@@ -101,6 +116,7 @@
                 closeModal();
             }
         }
+
         function switchTheme(theme) {
             const whiteBlackCheckbox = document.getElementById('whiteBlackCheckbox');
             const multicolorCheckbox = document.getElementById('multicolorCheckbox');
