@@ -7,8 +7,6 @@ from oauth2client.service_account import ServiceAccountCredentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import logging
-import threading
-from checker import sheet_checker
 
 logging.basicConfig(level=logging.INFO)
 
@@ -93,6 +91,7 @@ def add_to_db_sheet_thana(thana_name, user_email, spreadsheet_id):
     except Exception as e:
         logging.error(f"Error adding to db_sheet_thana: {str(e)}")
         raise
+
 def create_user_spreadsheet(thana_name, user_email):
     try:
         copied_spreadsheet = drive_service.files().copy(
@@ -205,74 +204,30 @@ def get_settings(spreadsheet_id):
             'display': row[4],
             'title': row[5]
         }
-        for row in settings if row[1] != '0'  # Exclude rows with time_of_display = 0
+        for row in settings if row[1] != '0'  # Exclude rows with '0' time of display
     ]
 
-def get_sheet_data(sheet_name, columns_to_display, photo_column, display_type, spreadsheet_id):
-    sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
-    all_values = sheet.get_all_values()
-
-    headers = []
-    for col in columns_to_display:
-        if col:  # Check if col is not empty
-            headers.append(all_values[0][ord(col) - ord('A')])
-        else:
-            headers.append('')  # Handle empty columns if needed
-
-    data = []
-    for row in all_values[1:]:
-        row_data = []
-        for col in columns_to_display:
-            if col:  # Check if col is not empty
-                cell_value = row[ord(col) - ord('A')]
-                # Check if the column is the photo column
-                if col == photo_column:
-                    file_id = get_file_id_from_url(cell_value)
-                    if file_id:
-                        # Link to download the image via Flask route
-                        cell_value = f'/get_image/{file_id}'
-                row_data.append(cell_value)
-            else:
-                row_data.append('')  # Handle empty columns if needed
-        data.append(row_data)
-
-    if display_type == 'last 5 row':
-        data = data[-5:]
-
-    return headers, data
-
-def get_file_id_from_url(url):
-    file_id = None
-    if 'drive.google.com' in url:
-        if '/file/d/' in url:
-            file_id = url.split('/file/d/')[1].split('/')[0]
-        elif 'id=' in url:
-            file_id = url.split('id=')[1].split('&')[0]
-    return file_id
-
-@app.route('/get_image/<file_id>')
-def get_image(file_id):
+def get_sheet_data(sheet_name, columns_to_display, photo_column, display, spreadsheet_id):
     try:
-        request = drive_service.files().get_media(fileId=file_id)
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-
-        fh.seek(0)
-        return send_file(fh, mimetype='image/jpeg', as_attachment=False)
+        sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
+        data = sheet.get_all_values()[1:]  # Skip header row
+        headers = [sheet.cell(1, col).value for col in range(1, sheet.col_count + 1)]
+        selected_data = [
+            [row[headers.index(col)] for col in columns_to_display]
+            for row in data if row[0] != ''  # Exclude empty rows
+        ]
+        
+        if photo_column:
+            photo_index = headers.index(photo_column)
+            for row in selected_data:
+                if row[photo_index]:
+                    row[photo_index] = f'<img src="{row[photo_index]}" width="100" height="100" />'
+        
+        return headers, selected_data
     except Exception as e:
-        app.logger.error(f"Error fetching image: {str(e)}")
-        return redirect('/static/placeholder.png')
-
-def start_background_task():
-    thread = threading.Thread(target=sheet_checker)
-    thread.daemon = True  # Daemonize thread to exit when main program exits
-    thread.start()
+        logging.error(f"Error getting sheet data: {str(e)}")
+        return [], []
 
 if __name__ == '__main__':
-    start_background_task()
-
-    app.run(debug=True)
+    setup_db_sheet_thana()  # Call this to set up the database
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5003)), debug=True)
