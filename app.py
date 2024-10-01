@@ -108,10 +108,10 @@ def create_user_spreadsheet(thana_name, user_email):
         ).execute()
 
         add_to_db_sheet_thana(thana_name, user_email, spreadsheet_id)
-        logging.info(f"Created new public spreadsheet for {thana_name} with ID: {spreadsheet_id}")
+        logging.info(f"Created new public spreadsheet for {thana_name} with ID: {spreadsheet_id}/{thana_name} के लिए नई सार्वजनिक स्प्रेडशीट बनाई गई है, जिसका ID है: {spreadsheet_id}")
         return spreadsheet_id
     except Exception as e:
-        logging.error(f"Error creating public user spreadsheet: {str(e)}")
+        logging.error(f"Error creating public user spreadsheet: {str(e)}/सार्वजनिक उपयोगकर्ता स्प्रेडशीट बनाने में त्रुटि: {str(e)}")
         raise
 
 def get_existing_thana_spreadsheet(thana_name):
@@ -159,7 +159,7 @@ def existing_thana():
         spreadsheet_id = get_existing_thana_spreadsheet(thana_name)
         
         if not spreadsheet_id:
-            return render_template('existing_thana.html', error="Thana not found. Please check the name and try again.")
+            return render_template('existing_thana.html', error="Thana not found. Please check the name and try again./थाना का नाम नहीं मिला। कृपया नाम जांचें और पुनः प्रयास करें।")
         
         return redirect(url_for('display_sheet', spreadsheet_id=spreadsheet_id))
     
@@ -202,40 +202,69 @@ def get_settings(spreadsheet_id):
             'columns_to_display': row[3].split(','),  # D: Columns to display
             'photo_column': row[6] if row[6] else None,  # G: Image column
             'display': row[4],
-            'title': row[2]
+            'title': row[5]
         }
-        for row in settings
+        for row in settings if row[1] != '0'  # Exclude rows with time_of_display = 0
     ]
 
-def get_sheet_data(sheet_name, columns_to_display, photo_column, display, spreadsheet_id):
-    if display != "yes":
-        return [], []
-    
+def get_sheet_data(sheet_name, columns_to_display, photo_column, display_type, spreadsheet_id):
     sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
-    all_data = sheet.get_all_values()
-    headers = all_data[0]
-    
-    selected_data = []
-    for row in all_data[1:]:
+    all_values = sheet.get_all_values()
+
+    headers = []
+    for col in columns_to_display:
+        if col:  # Check if col is not empty
+            headers.append(all_values[0][ord(col) - ord('A')])
+        else:
+            headers.append('')  # Handle empty columns if needed
+
+    data = []
+    for row in all_values[1:]:
         row_data = []
         for col in columns_to_display:
-            try:
-                col_index = headers.index(col.strip())  # Find the column index from headers
-                row_data.append(row[col_index])
-            except ValueError:
-                row_data.append(f"Column {col} not found")
-        if photo_column:
-            try:
-                photo_col_index = headers.index(photo_column)
-                row_data.append(f'<img src="{row[photo_col_index]}" alt="Photo" width="100" height="100">')
-            except ValueError:
-                row_data.append(f"Photo column {photo_column} not found")
-        selected_data.append(row_data)
-    
-    return headers, selected_data
+            if col:  # Check if col is not empty
+                cell_value = row[ord(col) - ord('A')]
+                # Check if the column is the photo column
+                if col == photo_column:
+                    file_id = get_file_id_from_url(cell_value)
+                    if file_id:
+                        # Link to download the image via Flask route
+                        cell_value = f'/get_image/{file_id}'
+                row_data.append(cell_value)
+            else:
+                row_data.append('')  # Handle empty columns if needed
+        data.append(row_data)
+
+    if display_type == 'last 5 row':
+        data = data[-5:]
+
+    return headers, data
+
+def get_file_id_from_url(url):
+    file_id = None
+    if 'drive.google.com' in url:
+        if '/file/d/' in url:
+            file_id = url.split('/file/d/')[1].split('/')[0]
+        elif 'id=' in url:
+            file_id = url.split('id=')[1].split('&')[0]
+    return file_id
+
+@app.route('/get_image/<file_id>')
+def get_image(file_id):
+    try:
+        request = drive_service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+
+        fh.seek(0)
+        return send_file(fh, mimetype='image/jpeg', as_attachment=False)
+    except Exception as e:
+        app.logger.error(f"Error fetching image: {str(e)}")
+        return redirect('/static/placeholder.png')
 
 if __name__ == '__main__':
-    if ON_VERCEL:
-        app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-    else:
-        app.run(debug=True)
+    app.run(debug=True)
