@@ -108,10 +108,10 @@ def create_user_spreadsheet(thana_name, user_email):
         ).execute()
 
         add_to_db_sheet_thana(thana_name, user_email, spreadsheet_id)
-        logging.info(f"Created new public spreadsheet for {thana_name} with ID: {spreadsheet_id}/{thana_name} के लिए नई सार्वजनिक स्प्रेडशीट बनाई गई है, जिसका ID है: {spreadsheet_id}")
+        logging.info(f"Created new public spreadsheet for {thana_name} with ID: {spreadsheet_id}")
         return spreadsheet_id
     except Exception as e:
-        logging.error(f"Error creating public user spreadsheet: {str(e)}/सार्वजनिक उपयोगकर्ता स्प्रेडशीट बनाने में त्रुटि: {str(e)}")
+        logging.error(f"Error creating public user spreadsheet: {str(e)}")
         raise
 
 def get_existing_thana_spreadsheet(thana_name):
@@ -159,7 +159,7 @@ def existing_thana():
         spreadsheet_id = get_existing_thana_spreadsheet(thana_name)
         
         if not spreadsheet_id:
-            return render_template('existing_thana.html', error="Thana not found. Please check the name and try again./थाना का नाम नहीं मिला। कृपया नाम जांचें और पुनः प्रयास करें।")
+            return render_template('existing_thana.html', error="Thana not found. Please check the name and try again.")
         
         return redirect(url_for('display_sheet', spreadsheet_id=spreadsheet_id))
     
@@ -202,32 +202,40 @@ def get_settings(spreadsheet_id):
             'columns_to_display': row[3].split(','),  # D: Columns to display
             'photo_column': row[6] if row[6] else None,  # G: Image column
             'display': row[4],
-            'title': row[5]
+            'title': row[2]
         }
-        for row in settings if row[1] != '0'  # Exclude rows with '0' time of display
+        for row in settings
     ]
 
 def get_sheet_data(sheet_name, columns_to_display, photo_column, display, spreadsheet_id):
-    try:
-        sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
-        data = sheet.get_all_values()[1:]  # Skip header row
-        headers = [sheet.cell(1, col).value for col in range(1, sheet.col_count + 1)]
-        selected_data = [
-            [row[headers.index(col)] for col in columns_to_display]
-            for row in data if row[0] != ''  # Exclude empty rows
-        ]
-        
-        if photo_column:
-            photo_index = headers.index(photo_column)
-            for row in selected_data:
-                if row[photo_index]:
-                    row[photo_index] = f'<img src="{row[photo_index]}" width="100" height="100" />'
-        
-        return headers, selected_data
-    except Exception as e:
-        logging.error(f"Error getting sheet data: {str(e)}")
+    if display != "yes":
         return [], []
+    
+    sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
+    all_data = sheet.get_all_values()
+    headers = all_data[0]
+    
+    selected_data = []
+    for row in all_data[1:]:
+        row_data = []
+        for col in columns_to_display:
+            try:
+                col_index = headers.index(col.strip())  # Find the column index from headers
+                row_data.append(row[col_index])
+            except ValueError:
+                row_data.append(f"Column {col} not found")
+        if photo_column:
+            try:
+                photo_col_index = headers.index(photo_column)
+                row_data.append(f'<img src="{row[photo_col_index]}" alt="Photo" width="100" height="100">')
+            except ValueError:
+                row_data.append(f"Photo column {photo_column} not found")
+        selected_data.append(row_data)
+    
+    return headers, selected_data
 
 if __name__ == '__main__':
-    setup_db_sheet_thana()  # Call this to set up the database
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5003)), debug=True)
+    if ON_VERCEL:
+        app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    else:
+        app.run(debug=True)
